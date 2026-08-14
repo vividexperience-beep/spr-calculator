@@ -1,6 +1,6 @@
 // キャッシュ名を変えると、次回オンライン時に強制的にファイルが更新されます。
 // index.html や master-data.js を修正したときは、末尾の数字を1つ上げてください。
-const CACHE_NAME = "spr-calculator-v1";
+const CACHE_NAME = "spr-calculator-v2";
 
 const FILES_TO_CACHE = [
   "./",
