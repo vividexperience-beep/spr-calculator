@@ -33,6 +33,7 @@ const MASTER_DATA = {
     }
   },
 
+  // 「支保なし」の座屈限界圧(210〜730mm)
   buckling: [
     { dia: 210, profile: "#90S", pressure: "0.191" },
     { dia: 260, profile: "#90S", pressure: "0.103" },
@@ -44,5 +45,26 @@ const MASTER_DATA = {
     { dia: 550, profile: "#87S", pressure: "0.023" },
     { dia: 640, profile: "#80S", pressure: "0.038" },
     { dia: 730, profile: "#80S", pressure: "0.026" }
-  ]
+  ],
+
+  // 820mm以降はウエイトによる浮上防止が適用外となり、支保工(6点支保／8点支保)が必要になる範囲。
+  // ここには支保工ありの座屈限界圧を登録する。(資料編-6 P.81 座屈限界圧マスタより)
+  bucklingSupport: {
+    six: [
+      { dia: 820,  profile: "#80S", pressure: "0.091" },
+      { dia: 910,  profile: "#79S", pressure: "0.136" },
+      { dia: 1000, profile: "#79S", pressure: "0.103" },
+      { dia: 1100, profile: "#79S", pressure: "0.078" },
+      { dia: 1230, profile: "#79S", pressure: "0.056" },
+      { dia: 1360, profile: "#79S", pressure: "0.041" }
+    ],
+    eight: [
+      { dia: 820,  profile: "#80S", pressure: "0.382" },
+      { dia: 910,  profile: "#79S", pressure: "0.571" },
+      { dia: 1000, profile: "#79S", pressure: "0.432" },
+      { dia: 1100, profile: "#79S", pressure: "0.326" },
+      { dia: 1230, profile: "#79S", pressure: "0.234" },
+      { dia: 1360, profile: "#79S", pressure: "0.174" }
+    ]
+  }
 };

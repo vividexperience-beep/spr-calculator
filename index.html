@@ -306,14 +306,44 @@ function getProfileArea(profile) {
     : null;
 }
 
+// 座屈限界圧マスタから該当行を探す。
+// 更生管径が表にある標準径とぴったり一致しない場合は、
+// 同じプロファイル内で「入力値以上の直近上位の標準径」を安全側として採用する。
+// (座屈限界圧は管径が大きいほど小さくなるため、上位側に丸めることで安全側の値になる)
+function findBucklingRow(renewal, profile, list) {
+  if (!list) return null;
+
+  const exact = list.find(r => r.dia === renewal && r.profile === profile);
+  if (exact) {
+    return { row: exact, exact: true };
+  }
+
+  const candidates = list
+    .filter(r => r.profile === profile && r.dia > renewal)
+    .sort((a, b) => a.dia - b.dia);
+
+  if (candidates.length > 0) {
+    return { row: candidates[0], exact: false };
+  }
+
+  return null;
+}
+
 function getBucklingPressure(renewal, profile) {
   if (!MASTER || !MASTER.buckling) return null;
 
-  const row = MASTER.buckling.find(r =>
-    r.dia === renewal && r.profile === profile
-  );
+  const found = findBucklingRow(renewal, profile, MASTER.buckling);
+  return found ? found : null;
+}
 
-  return row ? row.pressure : null;
+function bucklingResultText(found) {
+  if (!found) return "未設定";
+
+  const pressureText = `${found.row.pressure} MPa`;
+
+  return found.exact
+    ? pressureText
+    : `${pressureText}（φ${found.row.dia}の値を安全側として採用）`;
 }
 
 function getWeightInfo(dia) {
@@ -326,9 +356,12 @@ function getWeightInfo(dia) {
   if (dia >= 650 && dia <= 680) return { small:2, large:3 };
   if (dia >= 690 && dia <= 720) return { small:1, large:4 };
   if (dia >= 730 && dia <= 760) return { small:0, large:5 };
-  if (dia >= 770 && dia <= 790) return { small:1, large:5 };
+  if (dia >= 770 && dia <= 799) return { small:1, large:5 };
   return null;
 }
+
+// 更生管径800mm以上は、ウエイトによる浮上防止工が適用外となり、支保工(6点支保・8点支保)が必要になる。
+const SUPPORT_REQUIRED_FROM_DIA = 800;
 
 function round(value, digits) {
   const p = Math.pow(10, digits);
@@ -453,21 +486,42 @@ ${formatNum(actualWater, 0)}ℓ`
   };
 }
 
-function buildWeightData(renewal, length) {
+function buildWeightData(renewal, length, profile) {
   const weightInfo = getWeightInfo(renewal);
 
   if (!weightInfo) {
+    const sixFound = findBucklingRow(renewal, profile, MASTER.bucklingSupport.six);
+    const eightFound = findBucklingRow(renewal, profile, MASTER.bucklingSupport.eight);
+
+    const sixText = bucklingResultText(sixFound);
+    const eightText = bucklingResultText(eightFound);
+
     return {
       html: `
-        <div class="section-card">
-          <div class="section-title">浮上防止工</div>
-          <div class="line">ウエイト浮上防止工</div>
-          <div class="line">適用外</div>
+        <div class="section-card yellow">
+          <div class="section-title">浮上防止工・変形防止</div>
+          <div class="line">ウエイト浮上防止工は適用外です。</div>
+          <div class="line">支保工により浮上防止・変形防止を行ってください。</div>
+
+          <div class="spacer"></div>
+
+          <div class="line">座屈限界圧(支保工あり)</div>
+          <div class="row">
+            <div class="num">${sixText}</div>
+            <div class="label">6点支保</div>
+          </div>
+          <div class="row">
+            <div class="num">${eightText}</div>
+            <div class="label">8点支保</div>
+          </div>
         </div>
       `,
-      text: `浮上防止工
-ウエイト浮上防止工
-適用外`
+      text: `浮上防止工・変形防止
+ウエイト浮上防止工は適用外です。支保工により浮上防止・変形防止を行ってください。
+
+座屈限界圧(支保工あり)
+6点支保　${sixText}
+8点支保　${eightText}`
     };
   }
 
@@ -719,9 +773,20 @@ function calculateSpr() {
       3
     );
 
-  const weightData = buildWeightData(renewal, length);
-  const buckling = getBucklingPressure(renewal, data.profile);
-  const bucklingText = buckling ? `${buckling} MPa` : "未設定";
+  const weightData = buildWeightData(renewal, length, data.profile);
+
+  // ウエイトによる浮上防止が適用される範囲(小～中口径)は「支保なし」の座屈限界圧を表示する。
+  // 支保工が必要な範囲(大口径)は、weightData側に6点支保・8点支保の座屈限界圧をまとめて表示するため、
+  // ここでは重複表示しない。
+  const weightInfoForDisplay = getWeightInfo(renewal);
+  const buckling = weightInfoForDisplay ? getBucklingPressure(renewal, data.profile) : null;
+  const bucklingText = buckling ? bucklingResultText(buckling) : "未設定";
+  const bucklingCardHtml = weightInfoForDisplay
+    ? yellowCard("座屈限界圧", bucklingText)
+    : "";
+  const bucklingCopyLine = weightInfoForDisplay
+    ? `座屈限界圧：${bucklingText}\n\n`
+    : "";
 
   sprCopyText =
 `SPR 使用数量計算（円形管用）
@@ -753,9 +818,7 @@ ${mortarWaterData.text}
 
 注入量：${formatNum(injection, 3)} m³
 
-座屈限界圧：${bucklingText}
-
-${buildQualityText()}`;
+${bucklingCopyLine}${buildQualityText()}`;
 
   sprResultHtml = `
     ${buildMaterialCard(data, backfill)}
@@ -777,7 +840,7 @@ ${buildQualityText()}`;
     ${card("注入量", formatNum(injection, 3) + " m³")}
 
 
-    ${yellowCard("座屈限界圧", bucklingText)}
+    ${bucklingCardHtml}
 
     ${buildQualityHtml()}
   `;
