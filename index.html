@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111111">
+<title>SPR 使用数量計算（円形管用）</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="SPR計算">
+
+<style>
+body {
+  margin: 0;
+  padding: 16px;
+  padding-bottom: 200px;
+  background: #111;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+.app {
+  max-width: 480px;
+  margin: auto;
+}
+
+h1 {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  font-size: 18px;
+  margin: 24px 0 10px;
+}
+
+label {
+  display: block;
+  margin-top: 14px;
+  font-weight: bold;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  margin-top: 6px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+}
+
+button {
+  width: 100%;
+  margin-top: 22px;
+  padding: 16px;
+  font-size: 18px;
+  font-weight: bold;
+  border: none;
+  border-radius: 12px;
+  background: #3f7cff;
+  color: #fff;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #444;
+  margin: 28px 0 22px;
+}
+
+.result {
+  margin-top: 22px;
+}
+
+.card,
+.section-card {
+  background: #1e1e22;
+  padding: 14px;
+  margin-top: 10px;
+  border-radius: 12px;
+}
+
+.name {
+  color: #aaa;
+  font-size: 14px;
+}
+
+.value {
+  font-size: 22px;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 17px;
+  font-weight: bold;
+  line-height: 1.8;
+}
+
+.row .num {
+  white-space: nowrap;
+}
+
+.row .label {
+  color: #ccc;
+  text-align: right;
+}
+
+.note {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 6px;
+}
+
+.divider {
+  border-top: 1px solid #444;
+  margin: 10px 0;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.line {
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1.8;
+}
+
+.spacer {
+  height: 10px;
+}
+
+.error {
+  color: #ff7070;
+  font-weight: bold;
+  margin-top: 18px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.action-buttons button {
+  flex: 1;
+  margin-top: 0;
+}
+
+.reset-button {
+  background: #555;
+}
+
+.backfill-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.backfill-buttons button {
+  flex: 1;
+  margin-top: 0;
+  padding: 12px 6px;
+  font-size: 15px;
+  background: #555;
+}
+
+.backfill-buttons button.selected {
+  background: #159447;
+}
+
+.yellow {
+  color: #ffd700;
+}
+
+.yellow .name,
+.yellow .section-title,
+.yellow .line {
+  color: #ffd700;
+}
+
+.status {
+  font-size: 12px;
+  color: #666;
+  margin-top: 18px;
+  text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<h1>SPR 使用数量計算<br>（円形管用）</h1>
+
+<h2>[使用量計算]</h2>
+
+<label>既設管径 mm</label>
+<input id="existing" type="number" inputmode="decimal" placeholder="例：600">
+
+<label>更生管径 mm</label>
+<input id="renewal" type="number" inputmode="decimal" placeholder="例：550">
+
+<label>管渠延長 m</label>
+<input id="length" type="number" inputmode="decimal" placeholder="例：32.55">
+
+<label>裏込材</label>
+<div class="backfill-buttons">
+  <button id="btn12A" onclick="selectBackfill('12A')">12A<br>300kg</button>
+  <button id="btn21A" onclick="selectBackfill('21A')">21A<br>300kg</button>
+  <button id="btn35A" onclick="selectBackfill('35A')">35A<br>300kg×2</button>
+</div>
+
+<label>割増率</label>
+<input id="rate" type="number" inputmode="decimal" value="1.10">
+
+<button onclick="calculateSpr()">計算する</button>
+
+<hr>
+
+<h2>[エアー抜き長さ]</h2>
+
+<label>線路延長 m</label>
+<input id="lineLength" type="number" inputmode="decimal" placeholder="例：33.75">
+
+<label>勾配 ‰</label>
+<input id="slope" type="number" inputmode="decimal" placeholder="例：4.7">
+
+<button onclick="calculateAir()">計算</button>
+
+<div id="result" class="result"></div>
+
+<div class="status" id="offlineStatus"></div>
+
+</div>
+
+<script src="master-data.js"></script>
+<script>
+const PROFILE_PI = Math.PI;
+const TRUE_PI = Math.PI;
+
+let MASTER = null;
+let selectedBackfill = "12A";
+
+let sprResultHtml = "";
+let sprCopyText = "";
+let airResultHtml = "";
+let airCopyText = "";
+
+window.onload = function() {
+  // 以前はGoogle Apps Script(google.script.run.getMasterData())からマスタを取得していたが、
+  // オフライン対応のため master-data.js に埋め込んだデータをそのまま使う。
+  MASTER = MASTER_DATA;
+  updateBackfillButtons();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js")
+      .then(function() {
+        document.getElementById("offlineStatus").textContent = "オフライン対応 準備完了";
+      })
+      .catch(function() {
+        document.getElementById("offlineStatus").textContent = "";
+      });
+  }
+};
+
+function selectBackfill(type) {
+  selectedBackfill = type;
+  updateBackfillButtons();
+}
+
+function updateBackfillButtons() {
+  document.getElementById("btn12A").classList.toggle("selected", selectedBackfill === "12A");
+  document.getElementById("btn21A").classList.toggle("selected", selectedBackfill === "21A");
+  document.getElementById("btn35A").classList.toggle("selected", selectedBackfill === "35A");
+}
+
+function getProfile(dia) {
+  if (!MASTER || !MASTER.profile) return null;
+
+  return MASTER.profile.find(row =>
+    dia >= row.min && dia <= row.max
+  ) || null;
+}
+
+function getProfileArea(profile) {
+  const profileArea = {
+    "#90S": 460,
+    "#87S": 666,
+    "#80S": 740,
+    "#79S": 935
+  };
+
+  return Object.prototype.hasOwnProperty.call(profileArea, profile)
+    ? profileArea[profile]
+    : null;
+}
+
+// 座屈限界圧マスタから該当行を探す。
+// 更生管径が表にある標準径とぴったり一致しない場合は、
+// 同じプロファイル内で「入力値以上の直近上位の標準径」を安全側として採用する。
+// (座屈限界圧は管径が大きいほど小さくなるため、上位側に丸めることで安全側の値になる)
+function findBucklingRow(renewal, profile, list) {
+  if (!list) return null;
+
+  const exact = list.find(r => r.dia === renewal && r.profile === profile);
+  if (exact) {
+    return { row: exact, exact: true };
+  }
+
+  const candidates = list
+    .filter(r => r.profile === profile && r.dia > renewal)
+    .sort((a, b) => a.dia - b.dia);
+
+  if (candidates.length > 0) {
+    return { row: candidates[0], exact: false };
+  }
+
+  return null;
+}
+
+function getBucklingPressure(renewal, profile) {
+  if (!MASTER || !MASTER.buckling) return null;
+
+  const found = findBucklingRow(renewal, profile, MASTER.buckling);
+  return found ? found : null;
+}
+
+function bucklingResultText(found) {
+  if (!found) return "未設定";
+
+  const pressureText = `${found.row.pressure} MPa`;
+
+  return found.exact
+    ? pressureText
+    : `${pressureText}（φ${found.row.dia}の値を安全側として採用）`;
+}
+
+function getWeightInfo(dia) {
+  if (dia >= 210 && dia <= 320) return { small:0, large:1 };
+  if (dia >= 330 && dia <= 400) return { small:1, large:1 };
+  if (dia >= 410 && dia <= 470) return { small:0, large:2 };
+  if (dia >= 480 && dia <= 520) return { small:1, large:2 };
+  if (dia >= 530 && dia <= 590) return { small:0, large:3 };
+  if (dia >= 600 && dia <= 640) return { small:1, large:3 };
+  if (dia >= 650 && dia <= 680) return { small:2, large:3 };
+  if (dia >= 690 && dia <= 720) return { small:1, large:4 };
+  if (dia >= 730 && dia <= 760) return { small:0, large:5 };
+  if (dia >= 770 && dia <= 799) return { small:1, large:5 };
+  return null;
+}
+
+// 更生管径800mm以上は、ウエイトによる浮上防止工が適用外となり、支保工(6点支保・8点支保)が必要になる。
+const SUPPORT_REQUIRED_FROM_DIA = 800;
+
+function round(value, digits) {
+  const p = Math.pow(10, digits);
+  return Math.round(value * p) / p;
+}
+
+function ceilTo(value, digits) {
+  const p = Math.pow(10, digits);
+  return Math.ceil(value * p) / p;
+}
+
+function formatNum(value, digits = 3) {
+  return Number(value.toFixed(digits)).toString();
+}
+
+function formatFixed(value, digits = 1) {
+  return value.toFixed(digits);
+}
+
+function card(name, value) {
+  return `
+  <div class="card">
+    <div class="name">${name}</div>
+    <div class="value">${value}</div>
+  </div>
+  `;
+}
+
+function yellowCard(name, value) {
+  return `
+  <div class="card yellow">
+    <div class="name">${name}</div>
+    <div class="value">${value}</div>
+  </div>
+  `;
+}
+
+function useMeterCard(lengthUse, extraUse, totalUse) {
+  return `
+  <div class="card">
+    <div class="name">使用メーター数</div>
+
+    <div class="row">
+      <div class="num">${formatNum(lengthUse, 3)} m</div>
+      <div class="label">管渠延長分</div>
+    </div>
+
+    <div class="row">
+      <div class="num">${formatNum(extraUse, 3)} m</div>
+      <div class="label">両管口分 ＋1m</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <div class="num">${formatNum(totalUse, 3)} m</div>
+      <div class="label">合計</div>
+    </div>
+  </div>
+  `;
+}
+
+function buildMaterialCard(data, backfill) {
+  return `
+    <div class="section-card">
+      <div class="section-title">使用材料</div>
+
+      <div class="line">プロファイル</div>
+      <div class="line">${data.profile}</div>
+      <div class="line">H＝${data.h}mm　W＝${data.w}mm　T＝${data.t}mm</div>
+
+      <div class="spacer"></div>
+
+      <div class="line">モルタル</div>
+      <div class="line">${selectedBackfill}　重量 ${backfill.mixWeight}kg</div>
+      <div class="line">設定水量 ${backfill.mixWater}ℓ</div>
+    </div>
+  `;
+}
+
+function buildMortarWaterCard(mortar, water, backfill) {
+  const batchCount = Math.ceil(mortar / backfill.mixWeight);
+  const bagCount = selectedBackfill === "35A"
+    ? batchCount * 2
+    : batchCount;
+  const actualWater = batchCount * backfill.mixWater;
+
+  return {
+    html: `
+      <div class="section-card">
+        <div class="section-title">理論値 モルタル・練り水</div>
+
+        <div class="line"> ${formatNum(mortar, 1)}kg　　 ${formatNum(water, 1)}ℓ</div>
+
+        <div class="divider"></div>
+
+        <div class="line">混練</div>
+        <div class="line">${batchCount}バッチ</div>
+
+        <div class="spacer"></div>
+
+        <div class="line">使用モルタル数</div>
+        <div class="line">300kg×${bagCount}袋</div>
+
+        <div class="spacer"></div>
+
+        <div class="line">使用練り水</div>
+        <div class="line">${formatNum(actualWater, 0)}ℓ</div>
+      </div>
+    `,
+    text: `理論値 モルタル・練り水
+モルタル ${formatNum(mortar, 1)}kg　練り水 ${formatNum(water, 1)}ℓ
+
+混練
+${batchCount}バッチ
+
+使用モルタル数
+300kg×${bagCount}袋
+
+使用練り水
+${formatNum(actualWater, 0)}ℓ`
+  };
+}
+
+function buildWeightData(renewal, length, profile) {
+  const weightInfo = getWeightInfo(renewal);
+
+  if (!weightInfo) {
+    const sixFound = findBucklingRow(renewal, profile, MASTER.bucklingSupport.six);
+    const eightFound = findBucklingRow(renewal, profile, MASTER.bucklingSupport.eight);
+
+    const sixText = bucklingResultText(sixFound);
+    const eightText = bucklingResultText(eightFound);
+
+    return {
+      html: `
+        <div class="section-card yellow">
+          <div class="section-title">浮上防止工・変形防止</div>
+          <div class="line">ウエイト浮上防止工は適用外です。</div>
+          <div class="line">支保工により浮上防止・変形防止を行ってください。</div>
+
+          <div class="spacer"></div>
+
+          <div class="line">座屈限界圧(支保工あり)</div>
+
+          <div class="spacer"></div>
+
+          <div class="name">6点支保</div>
+          <div class="value">${sixText}</div>
+
+          <div class="spacer"></div>
+
+          <div class="name">8点支保</div>
+          <div class="value">${eightText}</div>
+        </div>
+      `,
+      text: `浮上防止工・変形防止
+ウエイト浮上防止工は適用外です。支保工により浮上防止・変形防止を行ってください。
+
+座屈限界圧(支保工あり)
+6点支保　${sixText}
+8点支保　${eightText}`
+    };
+  }
+
+  const fullCount = Math.floor(length / 5);
+  const remain = round(length - (fullCount * 5), 2);
+
+  const smallRows = weightInfo.small;
+  const largeRows = weightInfo.large;
+
+  const smallFullCount = fullCount * smallRows;
+  const largeFullCount = fullCount * largeRows;
+
+  let rowsHtml = "";
+  let useHtml = "";
+  let textLines = ["浮上防止工"];
+
+  if (smallRows > 0) {
+    rowsHtml += `<div class="line">小＝${smallRows}列</div>`;
+    textLines.push(`小＝${smallRows}列`);
+  }
+
+  if (largeRows > 0) {
+    rowsHtml += `<div class="line">大＝${largeRows}列</div>`;
+    textLines.push(`大＝${largeRows}列`);
+  }
+
+  textLines.push("");
+
+  if (smallRows > 0) {
+    const smallLine = remain > 0
+      ? `小＝${smallFullCount}本＋${formatNum(remain, 2)}m ×${smallRows}本`
+      : `小＝${smallFullCount}本`;
+
+    useHtml += `<div class="line">${smallLine}</div>`;
+    textLines.push(smallLine);
+  }
+
+  if (largeRows > 0) {
+    const largeLine = remain > 0
+      ? `大＝${largeFullCount}本＋${formatNum(remain, 2)}m ×${largeRows}本`
+      : `大＝${largeFullCount}本`;
+
+    useHtml += `<div class="line">${largeLine}</div>`;
+    textLines.push(largeLine);
+  }
+
+  return {
+    html: `
+      <div class="section-card">
+        <div class="section-title">浮上防止工</div>
+        ${rowsHtml}
+        <div class="spacer"></div>
+        ${useHtml}
+      </div>
+    `,
+    text: textLines.join("\n")
+  };
+}
+
+function buildQualityHtml() {
+  const q = MASTER.quality[selectedBackfill];
+
+  return `
+    <div class="section-card yellow">
+      <div class="section-title">社内規格値</div>
+      <div class="line">比重：${q.companySpec.density}</div>
+      <div class="line">フロー：${q.companySpec.flow}</div>
+      <div class="line">練上り温度：${q.companySpec.temp}</div>
+      <div class="line">圧縮強度：${q.companySpec.strength}</div>
+      <div class="line">水分比：${q.companySpec.waterRatio}</div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">特記仕様書及び管理値</div>
+      <div class="line">比重：${q.management.density}</div>
+      <div class="line">フロー：${q.management.flow}</div>
+      <div class="line">練上り温度：${q.management.temp}</div>
+      <div class="line">圧縮強度：${q.management.strength}</div>
+      <div class="line">水分比：${q.management.waterRatio}</div>
+    </div>
+  `;
+}
+
+function buildQualityText() {
+  const q = MASTER.quality[selectedBackfill];
+
+  return `社内規格値
+比重：${q.companySpec.density}
+フロー：${q.companySpec.flow}
+練上り温度：${q.companySpec.temp}
+圧縮強度：${q.companySpec.strength}
+水分比：${q.companySpec.waterRatio}
+
+特記仕様書及び管理値
+比重：${q.management.density}
+フロー：${q.management.flow}
+練上り温度：${q.management.temp}
+圧縮強度：${q.management.strength}
+水分比：${q.management.waterRatio}`;
+}
+
+function buildAirData(lineLength, slope) {
+  const zeroLevel = ceilTo((lineLength * slope) / 10, 1);
+  const plusTen = round(zeroLevel + 10, 1);
+
+  return {
+    zeroLevel: zeroLevel,
+    plusTen: plusTen,
+    html: `
+      <div id="airResult" class="section-card">
+        <div class="section-title">エアー抜き長さ</div>
+
+        <div class="name">0レベルまで</div>
+        <div class="value">${formatFixed(zeroLevel, 1)} cm</div>
+
+        <div class="spacer"></div>
+
+        <div class="name">+10cm</div>
+        <div class="value">${formatFixed(plusTen, 1)} cm</div>
+      </div>
+    `,
+    text: `エアー抜き長さ
+
+0レベルまで
+${formatFixed(zeroLevel, 1)} cm
+
++10cm
+${formatFixed(plusTen, 1)} cm`
+  };
+}
+
+function actionButtons() {
+  if (!sprResultHtml && !airResultHtml) return "";
+
+  return `
+    <div class="action-buttons">
+      <button onclick="copyResult()">コピー</button>
+      <button onclick="resetForm()" class="reset-button">リセット</button>
+    </div>
+  `;
+}
+
+function renderResults(scrollTargetId) {
+  const result = document.getElementById("result");
+
+  result.innerHTML =
+    airResultHtml +
+    sprResultHtml +
+    actionButtons();
+
+  if (scrollTargetId) {
+    const target = document.getElementById(scrollTargetId);
+    if (target) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+  }
+}
+
+function calculateSpr() {
+  if (!MASTER) {
+    alert("マスタ読込中です。少し待ってから再度押してください。");
+    return;
+  }
+
+  const existing = Number(document.getElementById("existing").value);
+  const renewal = Number(document.getElementById("renewal").value);
+  const length = Number(document.getElementById("length").value);
+  const rate = Number(document.getElementById("rate").value);
+
+  if (!existing || !renewal || !length || !rate) {
+    sprResultHtml =
+      '<div class="error">使用量計算：既設管径・更生管径・管渠延長・割増率を入力してください。</div>';
+    sprCopyText = "";
+    renderResults("result");
+    return;
+  }
+
+  if (renewal >= existing) {
+    sprResultHtml =
+      '<div class="error">使用量計算：更生管径が既設管径以上になっています。</div>';
+    sprCopyText = "";
+    renderResults("result");
+    return;
+  }
+
+  const data = getProfile(renewal);
+
+  if (!data) {
+    sprResultHtml =
+      '<div class="error">使用量計算：対象外の更生管径です。</div>';
+    sprCopyText = "";
+    renderResults("result");
+    return;
+  }
+
+  const backfill = MASTER.backfill[selectedBackfill];
+
+  const h = data.h;
+  const w = data.w;
+  const t = data.t;
+
+  const usePerMeter = round(PROFILE_PI * (renewal + h) / w, 3);
+  const lengthUse = round(usePerMeter * length, 3);
+  const extraUse = round(usePerMeter * 1, 3);
+  const totalUse = round(lengthUse + extraUse, 3);
+
+  const prA = getProfileArea(data.profile);
+
+  if (prA === null) {
+    sprResultHtml =
+      `<div class="error">使用量計算：${data.profile}のPrAが未設定です。</div>`;
+    sprCopyText = "";
+    renderResults("result");
+    return;
+  }
+
+  const D = existing / 1000;
+  const d = renewal / 1000;
+  const H = h / 1000;
+  const L = length;
+  const PrE = usePerMeter;
+
+  const q =
+    (
+      TRUE_PI *
+      (
+        Math.pow(D, 2) -
+        Math.pow(d + (2 * H), 2)
+      ) /
+      4
+      +
+      prA * Math.pow(10, -6) * PrE
+    ) *
+    (L - 0.1);
+
+  const injection = round(q * rate, 3);
+
+  const mortar = round(injection * backfill.materialKg, 1);
+  const water = round(injection * backfill.waterKg, 1);
+  const mortarWaterData = buildMortarWaterCard(mortar, water, backfill);
+
+  const waterFill =
+    round(
+      TRUE_PI *
+      Math.pow(renewal / 1000 / 2, 2) *
+      length,
+      3
+    );
+
+  const weightData = buildWeightData(renewal, length, data.profile);
+
+  // ウエイトによる浮上防止が適用される範囲(小～中口径)は「支保なし」の座屈限界圧を表示する。
+  // 支保工が必要な範囲(大口径)は、weightData側に6点支保・8点支保の座屈限界圧をまとめて表示するため、
+  // ここでは重複表示しない。
+  const weightInfoForDisplay = getWeightInfo(renewal);
+  const buckling = weightInfoForDisplay ? getBucklingPressure(renewal, data.profile) : null;
+  const bucklingText = buckling ? bucklingResultText(buckling) : "未設定";
+  const bucklingCardHtml = weightInfoForDisplay
+    ? yellowCard("座屈限界圧", bucklingText)
+    : "";
+  const bucklingCopyLine = weightInfoForDisplay
+    ? `座屈限界圧：${bucklingText}\n\n`
+    : "";
+
+  sprCopyText =
+`SPR 使用数量計算（円形管用）
+
+既設管径：φ${formatNum(existing, 0)} mm
+更生管径：φ${formatNum(renewal, 0)} mm
+管渠延長：${formatNum(length, 2)} m
+割増率：${formatNum(rate, 2)}
+
+使用材料
+プロファイル：${data.profile}
+H＝${h}mm　W＝${w}mm　T＝${t}mm
+モルタル：${selectedBackfill}　重量 ${backfill.mixWeight}kg
+設定水量：${backfill.mixWater}ℓ
+
+1m巻くのに必要量：${formatNum(usePerMeter, 3)} m
+
+使用メーター数
+${formatNum(lengthUse, 3)} m　管渠延長分
+${formatNum(extraUse, 3)} m　両管口分 0.5m＋0.5m
+${formatNum(totalUse, 3)} m　合計
+
+${weightData.text}
+
+水張り：${formatNum(waterFill, 3)} m³
+※ 人孔形状分を除く
+
+${mortarWaterData.text}
+
+注入量：${formatNum(injection, 3)} m³
+
+${bucklingCopyLine}${buildQualityText()}`;
+
+  sprResultHtml = `
+    ${buildMaterialCard(data, backfill)}
+
+    ${card("1m巻くのに必要量", formatNum(usePerMeter, 3) + " m")}
+
+    ${useMeterCard(lengthUse, extraUse, totalUse)}
+
+    ${weightData.html}
+
+    <div class="card">
+      <div class="name">水張り</div>
+      <div class="value">${formatNum(waterFill, 3)} m³</div>
+      <div class="note">※ 人孔形状分を除く</div>
+    </div>
+
+    ${mortarWaterData.html}
+
+    ${card("注入量", formatNum(injection, 3) + " m³")}
+
+
+    ${bucklingCardHtml}
+
+    ${buildQualityHtml()}
+  `;
+
+  renderResults("result");
+}
+
+function calculateAir() {
+  const lineLength = Number(document.getElementById("lineLength").value);
+  const slope = Number(document.getElementById("slope").value);
+
+  if (!lineLength || !slope) {
+    airResultHtml =
+      '<div id="airResult" class="error">エアー抜き長さ：線路延長と勾配を入力してください。</div>';
+    airCopyText = "";
+    renderResults("airResult");
+    return;
+  }
+
+  const airData = buildAirData(lineLength, slope);
+
+  airCopyText =
+`エアー抜き長さ
+
+線路延長：${formatNum(lineLength, 2)} m
+勾配：${formatNum(slope, 2)} ‰
+
+0レベルまで
+${formatFixed(airData.zeroLevel, 1)} cm
+
++10cm
+${formatFixed(airData.plusTen, 1)} cm`;
+
+  airResultHtml = airData.html;
+
+  renderResults("airResult");
+}
+
+function copyResult() {
+  const text = [airCopyText, sprCopyText].filter(Boolean).join("\n\n");
+
+  if (!text) return;
+
+  navigator.clipboard.writeText(text).then(function() {
+    alert("計算結果をコピーしました。");
+  }).catch(function() {
+    alert("コピーに失敗しました。");
+  });
+}
+
+function resetForm() {
+  document.getElementById("existing").value = "";
+  document.getElementById("renewal").value = "";
+  document.getElementById("length").value = "";
+  document.getElementById("rate").value = "1.10";
+  document.getElementById("lineLength").value = "";
+  document.getElementById("slope").value = "";
+
+  selectedBackfill = "12A";
+  updateBackfillButtons();
+
+  sprResultHtml = "";
+  sprCopyText = "";
+  airResultHtml = "";
+  airCopyText = "";
+
+  renderResults();
+
+  document.getElementById("existing").focus();
+}
+</script>
+
+</body>
+</html>
