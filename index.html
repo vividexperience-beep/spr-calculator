@@ -192,23 +192,16 @@ hr {
   margin-top: 0;
 }
 
-.history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.history-head .history-title {
+.history-title {
   font-size: 18px;
   font-weight: bold;
 }
 
 .history-clear {
-  width: auto;
-  margin-top: 0;
-  padding: 8px 14px;
-  font-size: 14px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px;
+  font-size: 16px;
   background: #555;
 }
 
@@ -921,11 +914,9 @@ function renderHistory() {
   // 区切り線を入れ、ボタンの文言も「履歴を消す」にしている。
   box.innerHTML = `
     <hr>
-    <div class="history-head">
-      <div class="history-title">計算履歴</div>
-      <button class="history-clear" onclick="clearHistory()">履歴を消す</button>
-    </div>
+    <div class="history-title">計算履歴</div>
     ${items}
+    <button class="history-clear" onclick="clearHistory()">履歴をすべて消す</button>
   `;
 }
 
