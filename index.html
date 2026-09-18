@@ -368,10 +368,10 @@ let airResultHtml = "";
 let airCopyText = "";
 
 // 計算履歴。端末の localStorage だけに保存し、外部には一切送らない。
-// 「使用量計算」と「エアー抜き長さ」で別々に最新5件ずつ持つ。
+// 「使用量計算」と「エアー抜き長さ」で別々に最新10件ずつ持つ。
 // (片方を続けて使っても、もう片方の履歴が押し出されないようにするため)
 const HISTORY_KEY = "spr.history.v1";
-const HISTORY_MAX = 5;
+const HISTORY_MAX = 10;
 let openHistoryId = "";
 
 window.onload = function() {
