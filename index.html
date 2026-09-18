@@ -516,7 +516,8 @@ function formatFixed(value, digits = 1) {
 function formatRoute(value) {
   const text = String(value == null ? "" : value).trim();
 
-  if (!text) return "";
+  // 未入力のとき、および「路線」としか入っていないときは何も表示しない
+  if (!text || text === "路線") return "";
 
   return /路線$/.test(text) ? text : text + "路線";
 }
