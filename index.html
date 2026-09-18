@@ -311,6 +311,12 @@ hr {
 
 <h2>[使用量計算]</h2>
 
+<form autocomplete="off" onsubmit="return false;">
+<label>路線番号</label>
+<input id="routeNo" type="text" name="q1" placeholder="例：RB77路線"
+       autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+</form>
+
 <label>既設管径 mm</label>
 <input id="existing" type="number" inputmode="decimal" placeholder="例：600">
 
@@ -508,6 +514,17 @@ function formatNum(value, digits = 3) {
 
 function formatFixed(value, digits = 1) {
   return value.toFixed(digits);
+}
+
+// 入力された路線番号に「路線」を付けて返す。
+// すでに「路線」で終わっている場合(例:「RB77路線」)は二重にしない。
+// 未入力のときは空文字を返し、表示自体を省く。
+function formatRoute(value) {
+  const text = String(value == null ? "" : value).trim();
+
+  if (!text) return "";
+
+  return /路線$/.test(text) ? text : text + "路線";
 }
 
 function card(name, value) {
@@ -978,6 +995,7 @@ function calculateSpr() {
     return;
   }
 
+  const route = formatRoute(document.getElementById("routeNo").value);
   const existing = Number(document.getElementById("existing").value);
   const renewal = Number(document.getElementById("renewal").value);
   const length = Number(document.getElementById("length").value);
@@ -1081,7 +1099,7 @@ function calculateSpr() {
   sprCopyText =
 `SPR 使用数量計算（円形管用）
 
-既設管径：φ${formatNum(existing, 0)} mm
+${route ? `路線番号：${route}\n` : ""}既設管径：φ${formatNum(existing, 0)} mm
 更生管径：φ${formatNum(renewal, 0)} mm
 管渠延長：${formatNum(length, 2)} m
 割増率：${formatNum(rate, 2)}
@@ -1111,6 +1129,8 @@ ${mortarWaterData.text}
 ${bucklingCopyLine}${buildQualityText()}`;
 
   sprResultHtml = `
+    ${route ? card("路線番号", route) : ""}
+
     ${buildMaterialCard(data, backfill)}
 
     ${card("1m巻くのに必要量", formatNum(usePerMeter, 3) + " m")}
@@ -1137,7 +1157,7 @@ ${bucklingCopyLine}${buildQualityText()}`;
 
   saveHistory(
     "spr",
-    `φ${formatNum(existing, 0)} → φ${formatNum(renewal, 0)}　${formatNum(length, 2)} m`,
+    `${route ? route + "　" : ""}φ${formatNum(existing, 0)} → φ${formatNum(renewal, 0)}　${formatNum(length, 2)} m`,
     sprCopyText
   );
 
@@ -1194,6 +1214,7 @@ function copyResult() {
 }
 
 function resetForm() {
+  document.getElementById("routeNo").value = "";
   document.getElementById("existing").value = "";
   document.getElementById("renewal").value = "";
   document.getElementById("length").value = "";
@@ -1211,7 +1232,7 @@ function resetForm() {
 
   renderResults();
 
-  document.getElementById("existing").focus();
+  document.getElementById("routeNo").focus();
 }
 </script>
 
