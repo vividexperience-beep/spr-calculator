@@ -188,6 +188,112 @@ hr {
   color: #ffd700;
 }
 
+.history {
+  margin-top: 34px;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-head .history-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.history-clear {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 14px;
+  font-size: 14px;
+  background: #555;
+}
+
+.history-item {
+  background: #1e1e22;
+  border-radius: 12px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.history-row {
+  width: 100%;
+  margin-top: 0;
+  padding: 14px;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.history-row.open {
+  background: #2a2a30;
+}
+
+.history-kind {
+  font-size: 13px;
+  font-weight: bold;
+  color: #111;
+  background: #7aa2ff;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.history-kind.air {
+  background: #ffd700;
+}
+
+.history-main {
+  font-size: 17px;
+  font-weight: bold;
+  flex: 1 1 auto;
+}
+
+.history-time {
+  font-size: 13px;
+  color: #aaa;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.history-body {
+  padding: 0 14px 14px;
+}
+
+.history-text {
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.7;
+  border-top: 1px solid #444;
+  padding-top: 12px;
+}
+
+.history-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.history-actions button {
+  flex: 1;
+  margin-top: 0;
+  padding: 12px;
+  font-size: 15px;
+}
+
+.history-empty {
+  font-size: 14px;
+  color: #aaa;
+  margin-top: 12px;
+}
+
 .status {
   font-size: 12px;
   color: #666;
@@ -240,6 +346,8 @@ hr {
 
 <div id="result" class="result"></div>
 
+<div id="history" class="history"></div>
+
 <div class="status" id="offlineStatus"></div>
 
 </div>
@@ -257,16 +365,37 @@ let sprCopyText = "";
 let airResultHtml = "";
 let airCopyText = "";
 
+// 計算履歴。端末の localStorage だけに保存し、外部には一切送らない。
+// 「使用量計算」と「エアー抜き長さ」で別々に最新5件ずつ持つ。
+// (片方を続けて使っても、もう片方の履歴が押し出されないようにするため)
+const HISTORY_KEY = "spr.history.v1";
+const HISTORY_MAX = 5;
+let openHistoryId = "";
+
 window.onload = function() {
   // 以前はGoogle Apps Script(google.script.run.getMasterData())からマスタを取得していたが、
   // オフライン対応のため master-data.js に埋め込んだデータをそのまま使う。
   MASTER = MASTER_DATA;
   updateBackfillButtons();
+  renderHistory();
 
   if ("serviceWorker" in navigator) {
+    // 更新後も古いキャッシュのまま表示され続けないように、
+    // 新しいサービスワーカーが有効になったら1度だけ自動で読み込み直す。
+    // (初回訪問時は controller が無いので、その場合は読み込み直さない)
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", function() {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+
     navigator.serviceWorker.register("service-worker.js")
-      .then(function() {
+      .then(function(registration) {
         document.getElementById("offlineStatus").textContent = "オフライン対応 準備完了";
+        registration.update();
       })
       .catch(function() {
         document.getElementById("offlineStatus").textContent = "";
@@ -655,6 +784,164 @@ ${formatFixed(plusTen, 1)} cm`
   };
 }
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    // プライベートブラウズなどで読めない場合は履歴なしとして動かす
+    return [];
+  }
+}
+
+function storeHistory(list) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (e) {
+    // 保存できなくても計算自体は続けられるようにする
+  }
+}
+
+// 種類ごとに新しい順で HISTORY_MAX 件だけ残す
+function trimHistory(list) {
+  const sorted = list.slice().sort(function(a, b) { return b.at - a.at; });
+  const count = { spr: 0, air: 0 };
+  const kept = [];
+
+  sorted.forEach(function(item) {
+    const kind = item.kind === "air" ? "air" : "spr";
+    if (count[kind] < HISTORY_MAX) {
+      count[kind]++;
+      kept.push(item);
+    }
+  });
+
+  return kept;
+}
+
+function saveHistory(kind, main, text) {
+  if (!text) return;
+
+  const list = loadHistory();
+  const newest = list.find(function(item) { return item.kind === kind; });
+
+  if (newest && newest.text === text) {
+    // 同じ内容で続けて計算したときは件数を増やさず、時刻だけ新しくする
+    newest.at = Date.now();
+    newest.main = main;
+  } else {
+    list.unshift({
+      id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      at: Date.now(),
+      kind: kind,
+      main: main,
+      text: text
+    });
+  }
+
+  storeHistory(trimHistory(list));
+  renderHistory();
+}
+
+function formatHistoryTime(at) {
+  const d = new Date(at);
+  const hh = ("0" + d.getHours()).slice(-2);
+  const mm = ("0" + d.getMinutes()).slice(-2);
+
+  return (d.getMonth() + 1) + "/" + d.getDate() + " " + hh + ":" + mm;
+}
+
+function renderHistory() {
+  const box = document.getElementById("history");
+  if (!box) return;
+
+  const list = loadHistory();
+
+  if (list.length === 0) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const items = list.map(function(item) {
+    const open = item.id === openHistoryId;
+    const kindClass = item.kind === "air" ? "history-kind air" : "history-kind";
+    const kindLabel = item.kind === "air" ? "エアー" : "使用量";
+
+    const body = open
+      ? `
+      <div class="history-body">
+        <div class="history-text">${escapeHtml(item.text)}</div>
+        <div class="history-actions">
+          <button onclick="copyHistory('${item.id}')">コピー</button>
+          <button class="reset-button" onclick="deleteHistory('${item.id}')">削除</button>
+        </div>
+      </div>
+    `
+      : "";
+
+    return `
+      <div class="history-item">
+        <button class="history-row${open ? " open" : ""}" onclick="toggleHistory('${item.id}')">
+          <span class="${kindClass}">${kindLabel}</span>
+          <span class="history-main">${escapeHtml(item.main)}</span>
+          <span class="history-time">${formatHistoryTime(item.at)}</span>
+        </button>
+        ${body}
+      </div>
+    `;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="history-head">
+      <div class="history-title">計算履歴</div>
+      <button class="history-clear" onclick="clearHistory()">すべて消す</button>
+    </div>
+    ${items}
+  `;
+}
+
+function toggleHistory(id) {
+  openHistoryId = openHistoryId === id ? "" : id;
+  renderHistory();
+}
+
+function copyHistory(id) {
+  const item = loadHistory().find(function(row) { return row.id === id; });
+  if (!item) return;
+
+  navigator.clipboard.writeText(item.text).then(function() {
+    alert("計算結果をコピーしました。");
+  }).catch(function() {
+    alert("コピーに失敗しました。");
+  });
+}
+
+function deleteHistory(id) {
+  const list = loadHistory().filter(function(item) { return item.id !== id; });
+
+  if (openHistoryId === id) openHistoryId = "";
+
+  storeHistory(list);
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm("計算履歴をすべて消します。よろしいですか？")) return;
+
+  openHistoryId = "";
+  storeHistory([]);
+  renderHistory();
+}
+
 function actionButtons() {
   if (!sprResultHtml && !airResultHtml) return "";
 
@@ -848,6 +1135,12 @@ ${bucklingCopyLine}${buildQualityText()}`;
     ${buildQualityHtml()}
   `;
 
+  saveHistory(
+    "spr",
+    `φ${formatNum(existing, 0)} → φ${formatNum(renewal, 0)}　${formatNum(length, 2)} m`,
+    sprCopyText
+  );
+
   renderResults("result");
 }
 
@@ -878,6 +1171,12 @@ ${formatFixed(airData.zeroLevel, 1)} cm
 ${formatFixed(airData.plusTen, 1)} cm`;
 
   airResultHtml = airData.html;
+
+  saveHistory(
+    "air",
+    `線路 ${formatNum(lineLength, 2)} m　勾配 ${formatNum(slope, 2)} ‰`,
+    airCopyText
+  );
 
   renderResults("airResult");
 }
