@@ -189,7 +189,7 @@ hr {
 }
 
 .history {
-  margin-top: 34px;
+  margin-top: 0;
 }
 
 .history-head {
@@ -917,10 +917,13 @@ function renderHistory() {
     `;
   }).join("");
 
+  // 計算結果の「リセット」とは別物であることが分かるように、
+  // 区切り線を入れ、ボタンの文言も「履歴を消す」にしている。
   box.innerHTML = `
+    <hr>
     <div class="history-head">
       <div class="history-title">計算履歴</div>
-      <button class="history-clear" onclick="clearHistory()">すべて消す</button>
+      <button class="history-clear" onclick="clearHistory()">履歴を消す</button>
     </div>
     ${items}
   `;
@@ -952,7 +955,7 @@ function deleteHistory(id) {
 }
 
 function clearHistory() {
-  if (!confirm("計算履歴をすべて消します。よろしいですか？")) return;
+  if (!confirm("計算履歴をすべて消します。\n(入力中の内容と計算結果はそのまま残ります)")) return;
 
   openHistoryId = "";
   storeHistory([]);
