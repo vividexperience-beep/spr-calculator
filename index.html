@@ -303,13 +303,15 @@ hr {
 
 <h1>SPR 使用数量計算<br>（円形管用）</h1>
 
-<h2>[使用量計算]</h2>
-
+<!-- 路線番号は使用量計算とエアー抜き長さの両方で使う共通項目なので、
+     どちらの見出しにも属さないようタイトル直下に置いている。 -->
 <form autocomplete="off" onsubmit="return false;">
 <label>路線番号</label>
 <input id="routeNo" type="text" name="q1" placeholder="例：RB77路線"
        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
 </form>
+
+<h2>[使用量計算]</h2>
 
 <label>既設管径 mm</label>
 <input id="existing" type="number" inputmode="decimal" placeholder="例：600">
