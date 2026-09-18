@@ -968,7 +968,14 @@ function actionButtons() {
 function renderResults(scrollTargetId) {
   const result = document.getElementById("result");
 
+  // 路線番号は使用量計算・エアー抜き長さで共通なので、
+  // どちらを計算した場合でも結果の先頭に1つだけ表示する。
+  const route = formatRoute(document.getElementById("routeNo").value);
+  const routeCardHtml =
+    route && (sprResultHtml || airResultHtml) ? card("路線番号", route) : "";
+
   result.innerHTML =
+    routeCardHtml +
     airResultHtml +
     sprResultHtml +
     actionButtons();
@@ -1124,8 +1131,6 @@ ${mortarWaterData.text}
 ${bucklingCopyLine}${buildQualityText()}`;
 
   sprResultHtml = `
-    ${route ? card("路線番号", route) : ""}
-
     ${buildMaterialCard(data, backfill)}
 
     ${card("1m巻くのに必要量", formatNum(usePerMeter, 3) + " m")}
@@ -1160,6 +1165,7 @@ ${bucklingCopyLine}${buildQualityText()}`;
 }
 
 function calculateAir() {
+  const route = formatRoute(document.getElementById("routeNo").value);
   const lineLength = Number(document.getElementById("lineLength").value);
   const slope = Number(document.getElementById("slope").value);
 
@@ -1176,7 +1182,7 @@ function calculateAir() {
   airCopyText =
 `エアー抜き長さ
 
-線路延長：${formatNum(lineLength, 2)} m
+${route ? `路線番号：${route}\n` : ""}線路延長：${formatNum(lineLength, 2)} m
 勾配：${formatNum(slope, 2)} ‰
 
 0レベルまで
@@ -1189,7 +1195,7 @@ ${formatFixed(airData.plusTen, 1)} cm`;
 
   saveHistory(
     "air",
-    `線路 ${formatNum(lineLength, 2)} m　勾配 ${formatNum(slope, 2)} ‰`,
+    `${route ? route + "　" : ""}線路 ${formatNum(lineLength, 2)} m　勾配 ${formatNum(slope, 2)} ‰`,
     airCopyText
   );
 
